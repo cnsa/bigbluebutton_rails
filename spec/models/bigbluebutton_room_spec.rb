@@ -9,44 +9,62 @@ describe BigbluebuttonRoom do
   before { FactoryGirl.create(:bigbluebutton_room) }
 
   it { should belong_to(:server) }
+  it { should_not validate_presence_of(:server_id) }
+
   it { should belong_to(:owner) }
   it { should_not validate_presence_of(:owner_id) }
   it { should_not validate_presence_of(:owner_type) }
 
-  it { should_not validate_presence_of(:server_id) }
+  it { should have_many(:recordings).dependent(:nullify) }
+
+  it { should have_many(:metadata).dependent(:destroy) }
+
   it { should validate_presence_of(:meetingid) }
+  it { should validate_uniqueness_of(:meetingid) }
+  it { should ensure_length_of(:meetingid).is_at_least(1).is_at_most(100) }
+
   it { should validate_presence_of(:voice_bridge) }
+  it { should validate_uniqueness_of(:voice_bridge) }
+
   it { should validate_presence_of(:name) }
+  it { should validate_uniqueness_of(:name) }
+  it { should ensure_length_of(:name).is_at_least(1).is_at_most(150) }
+
   it { should validate_presence_of(:param) }
+  it { should validate_uniqueness_of(:param) }
+  it { should ensure_length_of(:param).is_at_least(1) }
 
   it { should be_boolean(:private) }
-  it { should be_boolean(:randomize_meetingid) }
+
+  it { should be_boolean(:record) }
+
+  it { should validate_presence_of(:duration) }
+  it { should validate_numericality_of(:duration).only_integer }
+  it { should_not allow_value(-1).for(:duration) }
+  it { should allow_value(0).for(:duration) }
+  it { should allow_value(1).for(:duration) }
+
+  it { should ensure_length_of(:attendee_password).is_at_most(16) }
+
+  it { should ensure_length_of(:moderator_password).is_at_most(16) }
+
+  it { should ensure_length_of(:welcome_msg).is_at_most(250) }
+
+  it { should accept_nested_attributes_for(:metadata).allow_destroy(true) }
 
   [:name, :server_id, :meetingid, :attendee_password,
    :moderator_password, :welcome_msg, :owner, :private, :logout_url,
    :dial_number, :voice_bridge, :max_participants, :owner_id,
-   :owner_type, :randomize_meetingid, :param].
+   :owner_type, :param, :metadata_attributes].
     each do |attribute|
     it { should allow_mass_assignment_of(attribute) }
   end
   it { should_not allow_mass_assignment_of(:id) }
 
-  it { should validate_uniqueness_of(:meetingid) }
-  it { should validate_uniqueness_of(:name) }
-  it { should validate_uniqueness_of(:voice_bridge) }
-  it { should validate_uniqueness_of(:param) }
-
-  it { should ensure_length_of(:meetingid).is_at_least(1).is_at_most(100) }
-  it { should ensure_length_of(:name).is_at_least(1).is_at_most(150) }
-  it { should ensure_length_of(:attendee_password).is_at_most(16) }
-  it { should ensure_length_of(:moderator_password).is_at_most(16) }
-  it { should ensure_length_of(:welcome_msg).is_at_most(250) }
-  it { should ensure_length_of(:param).is_at_least(3) }
-
   # attr_accessors
   [:running, :participant_count, :moderator_count, :attendees,
-   :has_been_forcibly_ended, :start_time, :end_time,
-   :external, :server, :request_headers].each do |attr|
+   :has_been_forcibly_ended, :start_time, :end_time, :external,
+   :server, :request_headers, :record, :duration].each do |attr|
     it { should respond_to(attr) }
     it { should respond_to("#{attr}=") }
   end
@@ -148,7 +166,7 @@ describe BigbluebuttonRoom do
     end
   end
 
-  context "param format" do
+  context "#param format" do
     let(:msg) { I18n.t('bigbluebutton_rails.rooms.errors.param_format') }
     it { should validate_format_of(:param).not_with("123 321").with_message(msg) }
     it { should validate_format_of(:param).not_with("").with_message(msg) }
@@ -159,10 +177,14 @@ describe BigbluebuttonRoom do
     it { should validate_format_of(:param).not_with("ábcd").with_message(msg) }
     it { should validate_format_of(:param).not_with("-abc").with_message(msg) }
     it { should validate_format_of(:param).not_with("abc-").with_message(msg) }
+    it { should validate_format_of(:param).not_with("-").with_message(msg) }
     it { should validate_format_of(:param).with("_abc").with_message(msg) }
     it { should validate_format_of(:param).with("abc_").with_message(msg) }
     it { should validate_format_of(:param).with("abc") }
     it { should validate_format_of(:param).with("123") }
+    it { should validate_format_of(:param).with("1") }
+    it { should validate_format_of(:param).with("a") }
+    it { should validate_format_of(:param).with("_") }
     it { should validate_format_of(:param).with("abc-123_d5") }
   end
 
@@ -178,6 +200,22 @@ describe BigbluebuttonRoom do
     it "empty" do
       @room = FactoryGirl.build(:bigbluebutton_room, :param => "",
                             :name => "-My Name@ _Is Odd_-")
+    end
+  end
+
+  context "when room set to private" do
+    context "sets passwords that are not yet defined" do
+      let(:room) { FactoryGirl.create(:bigbluebutton_room, :private => false, :moderator_password => nil, :attendee_password => nil) }
+      before(:each) { room.update_attributes(:private => true) }
+      it { room.moderator_password.should_not be_nil }
+      it { room.attendee_password.should_not be_nil }
+    end
+
+    context "only sets the passwords if the room was public before" do
+      let(:room) { FactoryGirl.create(:bigbluebutton_room, :private => true, :moderator_password => "123", :attendee_password => "321") }
+      before(:each) { room.update_attributes(:private => true) }
+      it { room.moderator_password.should == "123" }
+      it { room.attendee_password.should == "321" }
     end
   end
 
@@ -305,6 +343,9 @@ describe BigbluebuttonRoom do
       }
       before {
         room.update_attributes(:welcome_msg => "Anything")
+        FactoryGirl.create(:bigbluebutton_room_metadata, :owner => room)
+        FactoryGirl.create(:bigbluebutton_room_metadata, :owner => room)
+
         mocked_api.should_receive(:"request_headers=").any_number_of_times.with({})
       }
 
@@ -313,8 +354,8 @@ describe BigbluebuttonRoom do
       context "calls #default_welcome_msg if welcome_msg is" do
         before do
           room.should_receive(:default_welcome_message).and_return("Hi!")
-          mocked_api.should_receive(:create_meeting).
-            with(anything, anything, hash_including(:welcome  => "Hi!"))
+          mocked_api.should_receive(:create_meeting)
+            .with(anything, anything, hash_including(:welcome  => "Hi!"))
           room.stub(:select_server).and_return(mocked_server)
           room.server = mocked_server
         end
@@ -333,12 +374,9 @@ describe BigbluebuttonRoom do
 
         context "for a stored room" do
           before do
-            hash = hash_including(:moderatorPW => room.moderator_password, :attendeePW => room.attendee_password,
-                                  :welcome  => room.welcome_msg, :dialNumber => room.dial_number,
-                                  :logoutURL => room.logout_url, :maxParticipants => room.max_participants,
-                                  :voiceBridge => room.voice_bridge)
-            mocked_api.should_receive(:create_meeting).
-              with(room.name, room.meetingid, hash).and_return(hash_create)
+            mocked_api.should_receive(:create_meeting)
+              .with(room.name, room.meetingid, get_create_params(room))
+              .and_return(hash_create)
             room.stub(:select_server).and_return(mocked_server)
             room.server = mocked_server
             room.send_create
@@ -351,12 +389,9 @@ describe BigbluebuttonRoom do
         context "for a new record" do
           let(:new_room) { FactoryGirl.build(:bigbluebutton_room) }
           before do
-            hash = hash_including(:moderatorPW => new_room.moderator_password, :attendeePW => new_room.attendee_password,
-                                  :welcome  => new_room.welcome_msg, :dialNumber => new_room.dial_number,
-                                  :logoutURL => new_room.logout_url, :maxParticipants => new_room.max_participants,
-                                  :voiceBridge => new_room.voice_bridge)
-            mocked_api.should_receive(:create_meeting).
-              with(new_room.name, new_room.meetingid, hash).and_return(hash_create)
+            mocked_api.should_receive(:create_meeting)
+              .with(new_room.name, new_room.meetingid, get_create_params(new_room))
+              .and_return(hash_create)
             new_room.stub(:select_server).and_return(mocked_server)
             new_room.server = mocked_server
             new_room.send_create
@@ -366,50 +401,33 @@ describe BigbluebuttonRoom do
           it("and do not save the record") { new_room.new_record?.should be_true }
         end
 
+        context "passing the user's name and id" do
+          let(:user) { FactoryGirl.build(:user) }
+          before do
+            mocked_api.should_receive(:create_meeting)
+              .with(room.name, room.meetingid, get_create_params(room, user.name, user.id))
+              .and_return(hash_create)
+            room.stub(:select_server).and_return(mocked_server)
+            room.server = mocked_server
+            room.send_create(user.name, user.id)
+          end
+          it { room.attendee_password.should be(attendee_password) }
+          it { room.moderator_password.should be(moderator_password) }
+          it { room.changed?.should be_false }
+        end
       end
 
-      context "randomizes meetingid" do
-        let(:fail_hash) { { :returncode => true, :meetingID => "new id", :messageKey => "duplicateWarning" } }
-        let(:success_hash) { { :returncode => true, :meetingID => "new id", :messageKey => "" } }
+      context "generates a meetingid if nil" do
         let(:new_id) { "new id" }
         before {
-          room.randomize_meetingid = true
+          room.meetingid = nil
           room.stub(:select_server).and_return(mocked_server)
           room.server = mocked_server
         }
-
         it "before calling create" do
-          room.should_receive(:random_meetingid).and_return(new_id)
-          hash = hash_including(:moderatorPW => room.moderator_password, :attendeePW => room.attendee_password,
-                                :welcome  => room.welcome_msg, :dialNumber => room.dial_number,
-                                :logoutURL => room.logout_url, :maxParticipants => room.max_participants,
-                                :voiceBridge => room.voice_bridge)
-          mocked_api.should_receive(:create_meeting).with(room.name, new_id, hash)
-          room.send_create
-        end
-
-        it "and tries again on error" do
-          # fails twice and then succeds
-          room.should_receive(:random_meetingid).exactly(3).times.and_return(new_id)
-          hash = hash_including(:moderatorPW => room.moderator_password, :attendeePW => room.attendee_password,
-                                :welcome  => room.welcome_msg, :dialNumber => room.dial_number,
-                                :logoutURL => room.logout_url, :maxParticipants => room.max_participants,
-                                :voiceBridge => room.voice_bridge)
-          mocked_api.should_receive(:create_meeting).
-            with(room.name, new_id, hash).twice.and_return(fail_hash)
-          mocked_api.should_receive(:create_meeting).
-            with(room.name, new_id, hash).once.and_return(success_hash)
-          room.send_create
-        end
-
-        it "and limits to 10 tries" do
-          room.should_receive(:random_meetingid).exactly(11).times.and_return(new_id)
-          hash = hash_including(:moderatorPW => room.moderator_password, :attendeePW => room.attendee_password,
-                                :welcome  => room.welcome_msg, :dialNumber => room.dial_number,
-                                :logoutURL => room.logout_url, :maxParticipants => room.max_participants,
-                                :voiceBridge => room.voice_bridge)
-          mocked_api.should_receive(:create_meeting).
-            with(room.name, new_id, hash).exactly(10).times.and_return(fail_hash)
+          room.should_receive(:unique_meetingid).and_return(new_id)
+          mocked_api.should_receive(:create_meeting)
+            .with(room.name, new_id, get_create_params(room))
           room.send_create
         end
       end
@@ -417,10 +435,7 @@ describe BigbluebuttonRoom do
       context "uses #full_logout_url when set" do
         before do
           room.full_logout_url = "full-version-of-logout-url"
-          hash = hash_including(:moderatorPW => room.moderator_password, :attendeePW => room.attendee_password,
-                                :welcome  => room.welcome_msg, :dialNumber => room.dial_number,
-                                :logoutURL => "full-version-of-logout-url", :maxParticipants => room.max_participants,
-                                :voiceBridge => room.voice_bridge)
+          hash = get_create_params(room).merge({ :logoutURL => "full-version-of-logout-url" })
           mocked_api.should_receive(:create_meeting).
             with(room.name, room.meetingid, hash).and_return(hash_create)
           room.stub(:select_server).and_return(mocked_server)
@@ -434,7 +449,6 @@ describe BigbluebuttonRoom do
 
         context "and saves the result" do
           before do
-            room.randomize_meetingid = false # take the shortest path inside #send_create
             room.should_receive(:select_server).and_return(another_server)
             room.should_receive(:require_server)
             room.should_receive(:do_create_meeting)
@@ -447,7 +461,6 @@ describe BigbluebuttonRoom do
         context "and does not save when is a new record" do
           let(:new_room) { FactoryGirl.build(:bigbluebutton_room) }
           before do
-            new_room.randomize_meetingid = false # take the shortest path inside #send_create
             new_room.should_receive(:select_server).and_return(another_server)
             new_room.should_receive(:require_server)
             new_room.should_receive(:do_create_meeting).and_return(nil)
@@ -507,13 +520,13 @@ describe BigbluebuttonRoom do
 
   context "validates passwords" do
     context "for private rooms" do
-      let (:room) { FactoryGirl.build(:bigbluebutton_room, :private => true) }
+      let(:room) { FactoryGirl.create(:bigbluebutton_room, :private => true) }
       it { room.should_not allow_value('').for(:moderator_password) }
       it { room.should_not allow_value('').for(:attendee_password) }
     end
 
     context "for public rooms" do
-      let (:room) { FactoryGirl.build(:bigbluebutton_room, :private => false) }
+      let(:room) { FactoryGirl.create(:bigbluebutton_room, :private => false) }
       it { room.should allow_value('').for(:moderator_password) }
       it { room.should allow_value('').for(:attendee_password) }
     end
@@ -553,70 +566,40 @@ describe BigbluebuttonRoom do
     end
   end
 
-  describe "#perform_join" do
+  describe "#create_meeting" do
     let(:room) { FactoryGirl.create(:bigbluebutton_room) }
     let(:user) { FactoryGirl.build(:user) }
+    before { room.should_receive(:fetch_is_running?) }
 
-    context "for an attendee" do
-      before { room.should_receive(:fetch_is_running?) }
-
-      context "when the conference is running" do
-        before {
-          room.should_receive(:is_running?).and_return(true)
-          room.should_receive(:join_url).with(user.name, :attendee).
-          and_return("http://test.com/attendee/join")
-        }
-        subject { room.perform_join(user.name, :attendee) }
-        it { should == "http://test.com/attendee/join" }
-      end
-
-      context "when the conference is not running" do
-        before { room.should_receive(:is_running?).and_return(false) }
-        subject { room.perform_join(user.name, :attendee) }
-        it { should be_nil }
-      end
+    context "when the conference is running" do
+      before {
+        room.should_receive(:is_running?).and_return(true)
+      }
+      subject { room.create_meeting(user.name) }
+      it { should be_false }
     end
 
-    context "for a moderator" do
-      before { room.should_receive(:fetch_is_running?) }
-
-      context "when the conference is running" do
-        before {
-          room.should_receive(:is_running?).and_return(true)
-          room.should_receive(:join_url).with(user.name, :moderator).
-          and_return("http://test.com/moderator/join")
-        }
-        subject { room.perform_join(user.name, :moderator) }
-        it { should == "http://test.com/moderator/join" }
-      end
-
-      context "when the conference is not running" do
-        before {
-          room.should_receive(:is_running?).and_return(false)
-          room.should_receive(:send_create)
-          room.should_receive(:join_url).with(user.name, :moderator).
-          and_return("http://test.com/moderator/join")
-        }
-        subject { room.perform_join(user.name, :moderator) }
-        it { should == "http://test.com/moderator/join" }
-      end
-
-      context "when the arg 'request' is informed" do
-        let(:request) { stub(ActionDispatch::Request) }
-        before {
-          request.stub!(:protocol).and_return("HTTP://")
-          request.stub!(:host_with_port).and_return("test.com:80")
-          room.should_receive(:add_domain_to_logout_url).with("HTTP://", "test.com:80")
-          room.should_receive(:is_running?).and_return(true)
-          room.should_receive(:join_url).with(user.name, :moderator).
-          and_return("http://test.com/moderator/join")
-        }
-        subject { room.perform_join(user.name, :moderator, request) }
-        it { should == "http://test.com/moderator/join" }
-      end
-
+    context "when the conference is not running" do
+      before {
+        room.should_receive(:is_running?).and_return(false)
+        room.should_receive(:send_create).with(user.name, user.id)
+      }
+      subject { room.create_meeting(user.name, user.id) }
+      it { should be_true }
     end
 
+    context "when the arg 'request' is informed" do
+      let(:request) { stub(ActionDispatch::Request) }
+      before {
+        request.stub!(:protocol).and_return("HTTP://")
+        request.stub!(:host_with_port).and_return("test.com:80")
+        room.should_receive(:add_domain_to_logout_url).with("HTTP://", "test.com:80")
+        room.should_receive(:is_running?).and_return(false)
+        room.should_receive(:send_create)
+      }
+      subject { room.create_meeting(user.name, user.id, request) }
+      it { should be_true }
+    end
   end
 
   describe "#full_logout_url" do
@@ -669,4 +652,34 @@ describe BigbluebuttonRoom do
     end
   end
 
+  describe "#get_metadata_for_create" do
+    let(:room) { FactoryGirl.create(:bigbluebutton_room, :server => nil) }
+    before {
+      @m1 = FactoryGirl.create(:bigbluebutton_room_metadata, :owner => room)
+      @m2 = FactoryGirl.create(:bigbluebutton_room_metadata, :owner => room)
+    }
+    it {
+      result = { "meta_#{@m1.name}" => @m1.content, "meta_#{@m2.name}" => @m2.content }
+      room.send(:get_metadata_for_create).should == result
+    }
+  end
+
+end
+
+def get_create_params(room, username=nil, userid=nil)
+  params = {
+    :moderatorPW => room.moderator_password,
+    :attendeePW => room.attendee_password,
+    :welcome  => room.welcome_msg,
+    :dialNumber => room.dial_number,
+    :logoutURL => room.logout_url,
+    :maxParticipants => room.max_participants,
+    :voiceBridge => room.voice_bridge,
+    :record => room.record,
+    :duration => room.duration
+  }
+  room.metadata.each { |meta| params["meta_#{meta.name}"] = meta.content }
+  params.merge!({ "meta_bbbrails-user-id" => userid }) unless userid.nil?
+  params.merge!({ "meta_bbbrails-user-name" => username }) unless username.nil?
+  params
 end

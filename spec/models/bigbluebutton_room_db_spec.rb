@@ -17,17 +17,18 @@ describe BigbluebuttonRoom do
     it { should have_db_column(:voice_bridge).of_type(:string) }
     it { should have_db_column(:max_participants).of_type(:integer) }
     it { should have_db_column(:private).of_type(:boolean) }
-    it { should have_db_column(:randomize_meetingid).of_type(:boolean) }
     it { should have_db_column(:external).of_type(:boolean) }
     it { should have_db_column(:param).of_type(:string) }
+    it { should have_db_column(:record).of_type(:boolean) }
+    it { should have_db_column(:duration).of_type(:integer) }
     it { should have_db_index(:server_id) }
     it { should have_db_index(:meetingid).unique(true) }
     it { should have_db_index(:voice_bridge).unique(true) }
     it "default values" do
       room = BigbluebuttonRoom.new
       room.private.should be_false
-      room.randomize_meetingid.should be_true
       room.external.should be_false
+      room.meetingid.should_not be_nil
     end
   end
 

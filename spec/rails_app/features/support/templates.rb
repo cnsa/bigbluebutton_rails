@@ -70,7 +70,7 @@ module TemplateHelpers
     has_element("a", { :href => bigbluebutton_rooms_path }) # rooms list
     n = 1
     servers.each do |server|
-      within(make_selector("ul#bbbrails_servers_list>li:nth(#{n})")) do
+      within(make_selector("ul#bbbrails_list>li:nth(#{n})")) do
         # server data
         has_content(server.name)
         has_content(server.url)
@@ -135,8 +135,6 @@ module TemplateHelpers
                 { :name => 'bigbluebutton_room[name]', :type => 'text' })
     has_element("input#bigbluebutton_room_meetingid",
                 { :name => 'bigbluebutton_room[meetingid]', :type => 'text' })
-    has_element("input#bigbluebutton_room_randomize_meetingid",
-                { :name => 'bigbluebutton_room[randomize_meetingid]', :type => 'checkbox' })
     has_element("input#bigbluebutton_room_private",
                 { :name => 'bigbluebutton_room[private]', :type => 'checkbox' })
     has_element("input#bigbluebutton_room_attendee_password",
@@ -159,7 +157,6 @@ module TemplateHelpers
                 { :name => 'bigbluebutton_room[voice_bridge]', :type => 'text' })
     has_element("label", { :for => 'bigbluebutton_room_name' })
     has_element("label", { :for => 'bigbluebutton_room_meetingid' })
-    has_element("label", { :for => 'bigbluebutton_room_randomize_meetingid' })
     has_element("label", { :for => 'bigbluebutton_room_private' })
     has_element("label", { :for => 'bigbluebutton_room_attendee_password' })
     has_element("label", { :for => 'bigbluebutton_room_moderator_password' })
@@ -180,7 +177,6 @@ module TemplateHelpers
     page_has_content(room.server_id)
     page_has_content(room.name)
     page_has_content(room.meetingid)
-    page_has_content(room.randomize_meetingid)
     page_has_content(room.private)
     page_has_content(room.attendee_password)
     page_has_content(room.moderator_password)
@@ -237,7 +233,7 @@ module TemplateHelpers
     has_element("a", { :href => bigbluebutton_servers_path }) # servers list
     n = 1
     rooms.each do |room|
-      within(make_selector("ul#bbbrails_rooms_list>li:nth(#{n})")) do
+      within(make_selector("ul#bbbrails_list>li:nth(#{n})")) do
         # room data
         has_content(room.server_id) unless room.server.nil?
         has_content(room.name)
