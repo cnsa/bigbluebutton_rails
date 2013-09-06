@@ -250,7 +250,7 @@ class Bigbluebutton::RoomsController < ApplicationController
     else
       respond_with do |format|
         format.html {
-          redirect_to(params[:redir_url] || bigbluebutton_room_path(@room), :notice => message)
+          redirect_to(bigbluebutton_room_path(@room), :notice => message)
         }
         format.json { render :json => message }
       end
@@ -330,7 +330,7 @@ class Bigbluebutton::RoomsController < ApplicationController
           @room.create_meeting(username, id, request)
         else
           flash[:error] = t('bigbluebutton_rails.rooms.errors.auth.cannot_create')
-          render wait_action, :status => :unauthorized
+          render wait_action
           return
         end
       end
