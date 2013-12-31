@@ -9,7 +9,7 @@ class BigbluebuttonRecording < ActiveRecord::Base
             :uniqueness => true
 
   attr_accessible :recordid, :meetingid, :name, :published, :start_time,
-                  :end_time, :available
+                  :end_time, :available, :description
 
   has_many :metadata,
            :class_name => 'BigbluebuttonMetadata',
@@ -104,6 +104,7 @@ class BigbluebuttonRecording < ActiveRecord::Base
     recording.available = true
     recording.room = BigbluebuttonRails.match_room_recording(data)
     recording.server = server
+    recording.description = I18n.t('bigbluebutton_rails.recordings.default.description', :time => recording.start_time.utc.to_formatted_s(:long))
     recording.save!
 
     sync_additional_data(recording, data)
