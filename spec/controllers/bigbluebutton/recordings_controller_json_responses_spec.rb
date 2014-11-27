@@ -13,21 +13,21 @@ describe Bigbluebutton::RecordingsController do
       end
       before(:each) { get :index, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json([@recording1, @recording2].to_json) }
     end
 
     describe "#show" do
       before(:each) { get :show, :id => recording.to_param, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json(recording.to_json) }
     end
 
     describe "#show" do
       before(:each) { get :show, :id => recording.to_param, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json(recording.to_json) }
     end
 
@@ -40,7 +40,7 @@ describe Bigbluebutton::RecordingsController do
           put :update, :id => @recording.to_param, :bigbluebutton_recording => new_recording.attributes, :format => 'json'
         }
         it { should respond_with(:success) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { response.body.should eq("true") }
       end
 
@@ -50,7 +50,7 @@ describe Bigbluebutton::RecordingsController do
           put :update, :id => @recording.to_param, :bigbluebutton_recording => new_recording.attributes, :format => 'json'
         }
         it { should respond_with(:unprocessable_entity) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it {
           new_recording.save # should fail
           should respond_with_json(new_recording.errors.full_messages.to_json)
@@ -66,7 +66,7 @@ describe Bigbluebutton::RecordingsController do
         delete :destroy, :id => @recording.to_param, :format => 'json'
       end
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
     end
 
     # these actions are essentially the same
@@ -81,7 +81,7 @@ describe Bigbluebutton::RecordingsController do
           }
           before(:each) { post action, :id => recording.to_param, :format => 'json' }
           it { should respond_with(:success) }
-          it { should respond_with_content_type(:json) }
+          it { should respond_with_content_type('application/json') }
           it { should respond_with_json(I18n.t("bigbluebutton_rails.recordings.notice.#{action.to_s}.success")) }
         end
 
@@ -94,7 +94,7 @@ describe Bigbluebutton::RecordingsController do
           }
           before(:each) { post action, :id => recording.to_param, :format => 'json' }
           it { should respond_with(:error) }
-          it { should respond_with_content_type(:json) }
+          it { should respond_with_content_type('application/json') }
           it { should respond_with_json(bbb_error_msg[0..200]) }
         end
 
@@ -102,7 +102,7 @@ describe Bigbluebutton::RecordingsController do
           before { recording.stub(:server) { nil } }
           before(:each) { post action, :id => recording.to_param, :format => 'json' }
           it { should respond_with(:error) }
-          it { should respond_with_content_type(:json) }
+          it { should respond_with_content_type('application/json') }
           it { should respond_with_json(I18n.t('bigbluebutton_rails.recordings.errors.check_for_server.no_server')) }
         end
       end

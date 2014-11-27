@@ -1,4 +1,6 @@
 class BigbluebuttonRoom < ActiveRecord::Base
+  include ActiveModel::ForbiddenAttributesProtection
+
   belongs_to :server, :class_name => 'BigbluebuttonServer'
   belongs_to :owner, :polymorphic => true
 
@@ -12,6 +14,18 @@ class BigbluebuttonRoom < ActiveRecord::Base
            :as => :owner,
            :dependent => :destroy,
            :inverse_of => :owner
+
+  has_one :room_options,
+          :class_name => 'BigbluebuttonRoomOptions',
+          :foreign_key => 'room_id',
+          :autosave => true,
+          :dependent => :destroy
+
+  delegate :default_layout, :default_layout=, :to => :room_options
+  delegate :presenter_share_only, :presenter_share_only=, :to => :room_options
+  delegate :auto_start_video, :auto_start_video=, :to => :room_options
+  delegate :auto_start_audio, :auto_start_audio=, :to => :room_options 
+  delegate :get_available_layouts, :to => :room_options
 
   accepts_nested_attributes_for :metadata,
     :allow_destroy => true,
@@ -45,16 +59,12 @@ class BigbluebuttonRoom < ActiveRecord::Base
   validates :attendee_password, :presence => true, :if => :private?
   validates :moderator_password, :presence => true, :if => :private?
 
-  attr_accessible :name, :server_id, :meetingid, :attendee_password, :moderator_password,
-                  :welcome_msg, :owner, :server, :private, :logout_url, :dial_number,
-                  :voice_bridge, :max_participants, :owner_id, :owner_type,
-                  :external, :param, :record, :duration, :metadata_attributes
-
   # Note: these params need to be fetched from the server before being accessed
   attr_accessor :running, :participant_count, :moderator_count, :attendees,
                 :has_been_forcibly_ended, :start_time, :end_time
 
   after_initialize :init
+  after_create :create_room_options
   before_validation :set_param
   before_validation :set_passwords
 
@@ -65,6 +75,13 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # in all GET/POST requests to a webconf server.
   # Currently used to send the client's IP to the load balancer.
   attr_accessor :request_headers
+
+  # In case there's no room_options created yet, build one
+  # (happens usually when an old database is migrated).
+  def room_options_with_initialize
+    room_options_without_initialize || build_room_options
+  end
+  alias_method_chain :room_options, :initialize
 
   # Convenience method to access the attribute <tt>running</tt>
   def is_running?
@@ -105,6 +122,9 @@ class BigbluebuttonRoom < ActiveRecord::Base
       @attendees << attendee
     end
 
+    # a 'shortcut' to update meetings since we have all information we need
+    update_current_meeting(response[:metadata])
+
     response
   end
 
@@ -121,12 +141,19 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # Triggers API call: <tt>end</tt>.
   def send_end
     require_server
-    self.server.api.end_meeting(self.meetingid, self.moderator_password)
+    response = self.server.api.end_meeting(self.meetingid, self.moderator_password)
+
+    # enqueue an update in the meetings for later on
+    Resque.enqueue(::BigbluebuttonMeetingUpdater, self.id, 15.seconds)
+
+    response
   end
 
   # Sends a call to the BBB server to create the meeting.
-  # 'username' is the name of the user that is creating the meeting.
-  # 'userid' is the id of the user that is creating the meeting.
+  # 'user' is the object that represents the user that is creating the meeting.
+  # 'user_opts' is a hash of parameters to override the parameters sent in the create
+  #   request. Can be passed by the application to enforce some values over the values
+  #   that are taken from the database.
   #
   # Will trigger 'select_server' to select a server where the meeting
   # will be created. If a server is selected, the model is saved.
@@ -136,14 +163,14 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # * <tt>moderator_password</tt>
   #
   # Triggers API call: <tt>create</tt>.
-  def send_create(username=nil, userid=nil)
+  def send_create(user=nil, user_opts={})
     # updates the server whenever a meeting will be created and guarantees it has a meetingid
     self.server = select_server
     self.meetingid = unique_meetingid() if self.meetingid.nil?
     self.save unless self.new_record?
     require_server
 
-    response = do_create_meeting(username, userid)
+    response = internal_create_meeting(user, user_opts)
     unless response.nil?
       self.attendee_password = response[:attendeePW]
       self.moderator_password = response[:moderatorPW]
@@ -157,19 +184,23 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # username:: Name of the user
   # role:: Role of the user in this room. Can be <tt>[:moderator, :attendee]</tt>
   # password:: Password to be use (in case role == nil)
+  # options:: Additional options to use when generating the URL
   #
   # Uses the API but does not require a request to the server.
-  def join_url(username, role, password=nil)
+  def join_url(username, role, password=nil, options={})
     require_server
 
     case role
     when :moderator
-      self.server.api.join_meeting_url(self.meetingid, username, self.moderator_password)
+      r = self.server.api.join_meeting_url(self.meetingid, username, self.moderator_password, options)
     when :attendee
-      self.server.api.join_meeting_url(self.meetingid, username, self.attendee_password)
+      r = self.server.api.join_meeting_url(self.meetingid, username, self.attendee_password, options)
     else
-      self.server.api.join_meeting_url(self.meetingid, username, password)
+      r = self.server.api.join_meeting_url(self.meetingid, username, password, options)
     end
+
+    r.strip! unless r.nil?
+    r
   end
 
 
@@ -179,7 +210,7 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # params:: Hash with a key :password
   def user_role(params)
     role = nil
-    if params.has_key?(:password)
+    if params && params.has_key?(:password)
       if self.moderator_password == params[:password]
         role = :moderator
       elsif self.attendee_password == params[:password]
@@ -216,11 +247,11 @@ class BigbluebuttonRoom < ActiveRecord::Base
   # The create logic.
   # Will create the meeting in this room unless it is already running.
   # Returns true if the meeting was created.
-  def create_meeting(username, userid=nil, request=nil)
+  def create_meeting(user=nil, request=nil, user_opts={})
     fetch_is_running?
     unless is_running?
       add_domain_to_logout_url(request.protocol, request.host_with_port) unless request.nil?
-      send_create(username, userid)
+      send_create(user, user_opts)
       true
     else
       false
@@ -249,7 +280,96 @@ class BigbluebuttonRoom < ActiveRecord::Base
     "#{SecureRandom.uuid}-#{Time.now.to_i}"
   end
 
+  # Returns the current meeting running on this room, if any.
+  def get_current_meeting
+    unless self.start_time.nil?
+      BigbluebuttonMeeting.find_by_room_id_and_start_time(self.id, self.start_time.utc)
+    else
+      nil
+    end
+  end
+
+  # Updates the current meeting associated with this room
+  def update_current_meeting(metadata=nil)
+    unless self.start_time.nil?
+      attrs = {
+        :server => self.server,
+        :meetingid => self.meetingid,
+        :name => self.name,
+        :record => self.record,
+        :running => self.running
+      }
+      unless metadata.nil?
+        begin
+          attrs[:creator_id] = metadata[BigbluebuttonRails.metadata_user_id].to_i
+          attrs[:creator_name] = metadata[BigbluebuttonRails.metadata_user_name]
+        rescue
+          attrs[:creator_id] = nil
+          attrs[:creator_name] = nil
+        end
+      end
+
+      meeting = self.get_current_meeting
+      if !meeting.nil?
+        meeting.update_attributes(attrs)
+
+      # only create a new meeting if it is running
+      elsif self.running
+        attrs.merge!({ :room => self, :start_time => self.start_time.utc })
+        meeting = BigbluebuttonMeeting.create(attrs)
+
+      end
+    else
+      # TODO: not enough information to find the meeting, do what?
+    end
+  end
+
+  # Sets all meetings related to this room as not running
+  def finish_meetings
+    BigbluebuttonMeeting.where(:running => true)
+      .find_by_room_id(room_id)
+      .update_attributes(:running => false)
+  end
+
+  # Gets a 'configToken' to use when joining the room.
+  # Returns a string with the token generated or nil if there's no need
+  # for a token (the options set in the room are the default options or there
+  # are no options set in the room) or if an error occurred.
+  #
+  # The entire process consists in these steps:
+  # * Go to the server get the default config.xml;
+  # * Modify the config.xml based on the room options set in the room;
+  # * Go to the server set the new config.xml;
+  # * Get the token identifier and return it.
+  #
+  # Triggers API call: <tt>getDefaultConfigXML</tt>.
+  # Triggers API call: <tt>setConfigXML</tt>.
+  def fetch_new_token
+    if self.room_options.is_modified?
+
+      # get the default XML we will use to create a new one
+      config_xml = self.server.api.get_default_config_xml
+
+      # set the options on the XML
+      # returns true if something was changed
+      config_xml = self.room_options.set_on_config_xml(config_xml)
+      if config_xml
+
+        # get the new token for the room, and return it
+        self.server.api.set_config_xml(self.meetingid, config_xml)
+      else
+        nil
+      end
+    else
+      nil
+    end
+  end
+
   protected
+
+  def create_room_options
+    BigbluebuttonRoomOptions.create(:room => self)
+  end
 
   # Every room needs a server to be used.
   # The server of a room can change during the room's lifespan, but
@@ -299,7 +419,7 @@ class BigbluebuttonRoom < ActiveRecord::Base
     value
   end
 
-  def do_create_meeting(username=nil, userid=nil)
+  def internal_create_meeting(user=nil, user_opts={})
     opts = {
       :record => self.record,
       :duration => self.duration,
@@ -310,14 +430,25 @@ class BigbluebuttonRoom < ActiveRecord::Base
       :logoutURL => self.full_logout_url || self.logout_url,
       :maxParticipants => self.max_participants,
       :voiceBridge => self.voice_bridge
-    }.merge(self.get_metadata_for_create)
+    }.merge(user_opts)
+
+    opts.merge!(self.get_metadata_for_create)
 
     # Add information about the user that is creating the meeting (if any)
-    opts.merge!({ "meta_#{BigbluebuttonRails.metadata_user_id}" => userid }) unless userid.nil?
-    opts.merge!({ "meta_#{BigbluebuttonRails.metadata_user_name}" => username }) unless username.nil?
+    unless user.nil?
+      userid = user.send(BigbluebuttonRails.user_attr_id)
+      username = user.send(BigbluebuttonRails.user_attr_name)
+      opts.merge!({ "meta_#{BigbluebuttonRails.metadata_user_id}" => userid })
+      opts.merge!({ "meta_#{BigbluebuttonRails.metadata_user_name}" => username })
+    end
 
     self.server.api.request_headers = @request_headers # we need the client's IP
-    self.server.api.create_meeting(self.name, self.meetingid, opts)
+    response = self.server.api.create_meeting(self.name, self.meetingid, opts)
+
+    # enqueue an update in the meetings to start now
+    Resque.enqueue(::BigbluebuttonMeetingUpdater, self.id)
+
+    response
   end
 
   # Returns the default welcome message to be shown in a conference in case

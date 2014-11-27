@@ -30,14 +30,6 @@ describe ActionController do
       should route_to(:controller => "bigbluebutton/rooms", :action => "destroy", :id => "1")
     }
     it {
-      {:get => "/only-rooms/bigbluebutton/rooms/external"}.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external")
-    }
-    it {
-      {:post => "/only-rooms/bigbluebutton/rooms/external"}.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external_auth")
-    }
-    it {
       {:get => "/only-rooms/bigbluebutton/rooms/1/join"}.
       should route_to(:controller => "bigbluebutton/rooms", :action => "join", :id => "1")
     }
@@ -59,7 +51,7 @@ describe ActionController do
     }
     it {
       {:post => "/only-rooms/bigbluebutton/rooms/1/join"}.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "auth", :id => "1")
+      should route_to(:controller => "bigbluebutton/rooms", :action => "join", :id => "1")
     }
 
   end

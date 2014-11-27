@@ -34,16 +34,74 @@ describe Bigbluebutton::ServersController do
   end
 
   describe "#create" do
-    before :each do
-      expect {
-        post :create, :bigbluebutton_server => FactoryGirl.attributes_for(:bigbluebutton_server)
-      }.to change{ BigbluebuttonServer.count }.by(1)
+    context "on success" do
+      before(:each) {
+        expect {
+          post :create, :bigbluebutton_server => FactoryGirl.attributes_for(:bigbluebutton_server)
+        }.to change{ BigbluebuttonServer.count }.by(1)
+      }
+      it { should respond_with(:redirect) }
+      it { should redirect_to(bigbluebutton_server_path(BigbluebuttonServer.last)) }
+      it { should set_the_flash.to(I18n.t('bigbluebutton_rails.servers.notice.create.success')) }
     end
-    it {
-      should respond_with(:redirect)
-      should redirect_to(bigbluebutton_server_path(BigbluebuttonServer.last))
-    }
-    it { should set_the_flash.to(I18n.t('bigbluebutton_rails.servers.notice.create.success')) }
+
+    context "on failure" do
+      before(:each) {
+        attributes = FactoryGirl.attributes_for(:bigbluebutton_server)
+        attributes.delete(:url)
+        post :create, :bigbluebutton_server => attributes
+      }
+      it { should render_template(:new) }
+    end
+
+    describe "params handling" do
+      let(:attrs) { FactoryGirl.attributes_for(:bigbluebutton_server) }
+      let(:params) { { :bigbluebutton_server => attrs } }
+      let(:allowed_params) {
+        [ :name, :url, :version, :salt, :param ]
+      }
+
+      it {
+        # we just check that the rails method 'permit' is being called on the hash with the
+        # correct parameters
+        server = BigbluebuttonServer.new
+        BigbluebuttonServer.stub(:new).and_return(server)
+        attrs.stub(:permit).and_return(attrs)
+        controller.stub(:params).and_return(params)
+
+        post :create, params
+        attrs.should have_received(:permit).with(*allowed_params)
+      }
+    end
+
+    # to make sure it doesn't break if the hash informed doesn't have the key :bigbluebutton_server
+    describe "if parameters are not informed" do
+      it {
+        put :create
+        should render_template(:new)
+      }
+    end
+
+    context "with :redir_url" do
+      context "on success" do
+        before(:each) {
+          post :create, :bigbluebutton_server => FactoryGirl.attributes_for(:bigbluebutton_server), :redir_url => '/any'
+        }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+
+      context "on failure" do
+        before(:each) {
+          attributes = FactoryGirl.attributes_for(:bigbluebutton_server)
+          attributes.delete(:url)
+          post :create, :bigbluebutton_server => attributes, :redir_url => '/any'
+        }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+    end
+
   end
 
   describe "#update" do
@@ -76,20 +134,80 @@ describe Bigbluebutton::ServersController do
       it { should render_template(:edit) }
       it { should assign_to(:server).with(@server) }
     end
- end
 
+    describe "params handling" do
+      let(:attrs) { FactoryGirl.attributes_for(:bigbluebutton_server) }
+      let(:params) { { :bigbluebutton_server => attrs } }
+      let(:allowed_params) {
+        [ :name, :url, :version, :salt, :param ]
+      }
+
+      it {
+        # we just check that the rails method 'permit' is being called on the hash with the
+        # correct parameters
+        BigbluebuttonServer.stub(:find_by_param).and_return(@server)
+        @server.stub(:update_attributes).and_return(true)
+        attrs.stub(:permit).and_return(attrs)
+        controller.stub(:params).and_return(params)
+
+        put :update, :id => @server.to_param, :bigbluebutton_server => attrs
+        attrs.should have_received(:permit).with(*allowed_params)
+      }
+    end
+
+    # to make sure it doesn't break if the hash informed doesn't have the key :bigbluebutton_server
+    describe "if parameters are not informed" do
+      it {
+        put :update, :id => @server.to_param
+        should redirect_to(bigbluebutton_server_path(@server))
+      }
+    end
+
+    context "with :redir_url" do
+      context "on success" do
+        before(:each) {
+          put :update, :id => @server.to_param, :bigbluebutton_server => new_server.attributes, :redir_url => '/any'
+        }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+
+      context "on failure" do
+        before(:each) {
+          new_server.url = nil # invalid
+          put :update, :id => @server.to_param, :bigbluebutton_server => new_server.attributes, :redir_url => '/any'
+        }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+    end
+
+  end
 
   describe "#destroy" do
-    before :each do
+    context "on success" do
+    before(:each) {
       @server = server
       expect {
         delete :destroy, :id => @server.to_param
       }.to change{ BigbluebuttonServer.count }.by(-1)
-    end
+    }
     it {
       should respond_with(:redirect)
       should redirect_to(bigbluebutton_servers_path)
     }
+    end
+
+    context "with :redir_url" do
+      context "on success" do
+        before(:each) {
+          @server = server
+          delete :destroy, :id => @server.to_param, :redir_url => '/any'
+        }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+    end
   end
 
   describe "#activity" do
@@ -97,7 +215,7 @@ describe Bigbluebutton::ServersController do
     let(:room2) { FactoryGirl.create(:bigbluebutton_room, :server => server) }
     before do
       # return our mocked server
-      BigbluebuttonServer.stub!(:find_by_param).with(server.to_param).
+      BigbluebuttonServer.stub(:find_by_param).with(server.to_param).
         and_return(server)
     end
 
@@ -170,7 +288,7 @@ describe Bigbluebutton::ServersController do
     let(:recording_ids) { "id1,id2,id3" }
     before do
       # return our mocked server
-      BigbluebuttonServer.stub!(:find_by_param).with(server.to_param).and_return(server)
+      BigbluebuttonServer.stub(:find_by_param).with(server.to_param).and_return(server)
     end
 
     context "on success" do
@@ -195,13 +313,33 @@ describe Bigbluebutton::ServersController do
       it { should redirect_to(recordings_bigbluebutton_server_path(server)) }
       it { should set_the_flash.to(bbb_error_msg[0..200]) }
     end
+
+    context "with :redir_url" do
+      context "on success" do
+        before {
+          server.should_receive(:send_publish_recordings).with(recording_ids, true)
+        }
+        before(:each) { post :publish_recordings, :id => server.to_param, :recordings => recording_ids, :redir_url => '/any' }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+
+      context "on failure" do
+        let(:bbb_error) { BigBlueButton::BigBlueButtonException.new() }
+        before { server.should_receive(:send_publish_recordings) { raise bbb_error } }
+        before(:each) { post :publish_recordings, :id => server.to_param, :recordings => recording_ids, :redir_url => '/any' }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+    end
+
   end
 
   describe "#unpublish_recordings" do
     let(:recording_ids) { "id1,id2,id3" }
     before do
       # return our mocked server
-      BigbluebuttonServer.stub!(:find_by_param).with(server.to_param).and_return(server)
+      BigbluebuttonServer.stub(:find_by_param).with(server.to_param).and_return(server)
     end
 
     context "on success" do
@@ -225,12 +363,32 @@ describe Bigbluebutton::ServersController do
       it { should redirect_to(recordings_bigbluebutton_server_path(server)) }
       it { should set_the_flash.to(bbb_error_msg[0..200]) }
     end
+
+    context "with :redir_url" do
+      context "on success" do
+        before {
+          server.should_receive(:send_publish_recordings).with(recording_ids, false)
+        }
+        before(:each) { post :unpublish_recordings, :id => server.to_param, :recordings => recording_ids, :redir_url => '/any' }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+
+      context "on failure" do
+        let(:bbb_error) { BigBlueButton::BigBlueButtonException.new() }
+        before { server.should_receive(:send_publish_recordings) { raise bbb_error } }
+        before(:each) { post :unpublish_recordings, :id => server.to_param, :recordings => recording_ids, :redir_url => '/any' }
+        it { should respond_with(:redirect) }
+        it { should redirect_to "/any" }
+      end
+    end
+
   end
 
   describe "#fetch_recordings" do
     before do
       # return our mocked server
-      BigbluebuttonServer.stub!(:find_by_param).with(server.to_param).and_return(server)
+      BigbluebuttonServer.stub(:find_by_param).with(server.to_param).and_return(server)
     end
 
     context "on success" do

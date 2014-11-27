@@ -16,11 +16,6 @@ describe BigbluebuttonServer do
   it { should validate_presence_of(:version) }
   it { should validate_presence_of(:param) }
 
-  [:name, :url, :salt, :version, :param].each do |attribute|
-    it { should allow_mass_assignment_of(attribute) }
-  end
-  it { should_not allow_mass_assignment_of(:id) }
-
   context "uniqueness of" do
     before(:each) { FactoryGirl.create(:bigbluebutton_server) }
     it { should validate_uniqueness_of(:url) }
@@ -76,20 +71,21 @@ describe BigbluebuttonServer do
 
   context "param format" do
     let(:msg) { I18n.t('bigbluebutton_rails.servers.errors.param_format') }
-    it { should validate_format_of(:param).not_with("123 321").with_message(msg) }
-    it { should validate_format_of(:param).not_with("").with_message(msg) }
-    it { should validate_format_of(:param).not_with("ab@c").with_message(msg) }
-    it { should validate_format_of(:param).not_with("ab#c").with_message(msg) }
-    it { should validate_format_of(:param).not_with("ab$c").with_message(msg) }
-    it { should validate_format_of(:param).not_with("ab%c").with_message(msg) }
-    it { should validate_format_of(:param).not_with("ábcd").with_message(msg) }
-    it { should validate_format_of(:param).not_with("-abc").with_message(msg) }
-    it { should validate_format_of(:param).not_with("abc-").with_message(msg) }
-    it { should validate_format_of(:param).with("_abc").with_message(msg) }
-    it { should validate_format_of(:param).with("abc_").with_message(msg) }
-    it { should validate_format_of(:param).with("abc") }
-    it { should validate_format_of(:param).with("123") }
-    it { should validate_format_of(:param).with("abc-123_d5") }
+    it { should_not allow_value("123 321").for(:param).with_message(msg) }
+    it { should_not allow_value("").for(:param).with_message(msg) }
+    it { should_not allow_value("ab@c").for(:param).with_message(msg) }
+    it { should_not allow_value("ab#c").for(:param).with_message(msg) }
+    it { should_not allow_value("ab$c").for(:param).with_message(msg) }
+    it { should_not allow_value("ab%c").for(:param).with_message(msg) }
+    it { should_not allow_value("ábcd").for(:param).with_message(msg) }
+    it { should_not allow_value("-abc").for(:param).with_message(msg) }
+    it { should_not allow_value("abc-").for(:param).with_message(msg) }
+    it { should_not allow_value("-").for(:param).with_message(msg) }
+    it { should allow_value("_abc").for(:param).with_message(msg) }
+    it { should allow_value("abc_").for(:param).with_message(msg) }
+    it { should allow_value("abc").for(:param).with_message(msg) }
+    it { should allow_value("123").for(:param).with_message(msg) }
+    it { should allow_value("abc-123_d5").for(:param).with_message(msg) }
   end
 
   context "sets param as the downcased parameterized name if param is" do
@@ -142,7 +138,7 @@ describe BigbluebuttonServer do
   it { should respond_to(:fetch_meetings) }
   it { should respond_to(:meetings) }
 
-  context "fetching info from bbb" do
+  describe "#fetch_meetings" do
     let(:server) { FactoryGirl.create(:bigbluebutton_server) }
     let(:room1) { FactoryGirl.create(:bigbluebutton_room, :server => server, :meetingid => "room1") }
     let(:room2) { FactoryGirl.create(:bigbluebutton_room, :server => server, :meetingid => "room2") }
@@ -162,7 +158,7 @@ describe BigbluebuttonServer do
     }
 
     before {
-      @api_mock = mock(BigBlueButton::BigBlueButtonApi)
+      @api_mock = double(BigBlueButton::BigBlueButtonApi)
       server.stub(:api).and_return(@api_mock)
       @api_mock.should_receive(:get_meetings).and_return(hash)
       server.fetch_meetings
@@ -186,6 +182,8 @@ describe BigbluebuttonServer do
     it { server.meetings[2].new_record?.should be_true }
     it { server.meetings[2].external.should be_true }
     it { server.meetings[2].private.should be_true  }
+
+    it "updates the meeting associated with this room"
   end
 
   describe "#send_publish_recordings" do
@@ -199,7 +197,7 @@ describe BigbluebuttonServer do
       let(:ids) { "#{recording1.recordid},#{recording2.recordid}" }
       let(:publish) { true }
       before do
-        @api_mock = mock(BigBlueButton::BigBlueButtonApi)
+        @api_mock = double(BigBlueButton::BigBlueButtonApi)
         server.stub(:api).and_return(@api_mock)
         @api_mock.should_receive(:publish_recordings).with(ids, publish)
       end
@@ -217,7 +215,7 @@ describe BigbluebuttonServer do
     context "sends delete_recordings" do
       let(:ids) { "id1,id2,id3" }
       before do
-        @api_mock = mock(BigBlueButton::BigBlueButtonApi)
+        @api_mock = double(BigBlueButton::BigBlueButtonApi)
         server.stub(:api).and_return(@api_mock)
         @api_mock.should_receive(:delete_recordings).with(ids)
       end
@@ -229,7 +227,7 @@ describe BigbluebuttonServer do
     let(:server) { FactoryGirl.create(:bigbluebutton_server) }
     let(:params) { { :meetingID => "id1,id2,id3" } }
     before do
-      @api_mock = mock(BigBlueButton::BigBlueButtonApi)
+      @api_mock = double(BigBlueButton::BigBlueButtonApi)
       server.stub(:api).and_return(@api_mock)
     end
 

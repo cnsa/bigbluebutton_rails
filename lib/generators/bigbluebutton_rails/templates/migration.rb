@@ -34,9 +34,20 @@ class CreateBigbluebuttonRails < ActiveRecord::Migration
     add_index :bigbluebutton_rooms, :meetingid, :unique => true
     add_index :bigbluebutton_rooms, :voice_bridge, :unique => true
 
+    create_table :bigbluebutton_room_options do |t|
+      t.integer :room_id
+      t.string :default_layout
+      t.boolean :presenter_share_only
+      t.boolean :auto_start_video
+      t.boolean :auto_start_audio
+      t.timestamps
+    end
+    add_index :bigbluebutton_room_options, :room_id
+
     create_table :bigbluebutton_recordings do |t|
       t.integer :server_id
       t.integer :room_id
+      t.integer :meeting_id
       t.string :recordid
       t.string :meetingid
       t.string :name
@@ -65,13 +76,29 @@ class CreateBigbluebuttonRails < ActiveRecord::Migration
       t.integer :length
       t.timestamps
     end
+
+    create_table :bigbluebutton_meetings do |t|
+      t.integer :server_id
+      t.integer :room_id
+      t.string :meetingid
+      t.string :name
+      t.datetime :start_time
+      t.boolean :running, :default => false
+      t.boolean :record, :default => false
+      t.integer :creator_id
+      t.string :creator_name
+      t.timestamps
+    end
+    add_index :bigbluebutton_meetings, [:meetingid, :start_time], :unique => true
   end
 
   def self.down
+    drop_table :bigbluebutton_meetings
     drop_table :bigbluebutton_playback_formats
     drop_table :bigbluebutton_metadata
     drop_table :bigbluebutton_recordings
     drop_table :bigbluebutton_rooms
+    drop_table :bigbluebutton_rooms_options
     drop_table :bigbluebutton_servers
   end
 

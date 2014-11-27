@@ -1,6 +1,8 @@
 require 'bigbluebutton_api'
 
 class BigbluebuttonServer < ActiveRecord::Base
+  include ActiveModel::ForbiddenAttributesProtection
+
   has_many :rooms,
            :class_name => 'BigbluebuttonRoom',
            :foreign_key => 'server_id',
@@ -38,8 +40,6 @@ class BigbluebuttonServer < ActiveRecord::Base
             :presence => true,
             :inclusion => { :in => ['0.7', '0.8'] }
 
-  attr_accessible :name, :url, :version, :salt, :param
-
   # Array of <tt>BigbluebuttonMeeting</tt>
   attr_reader :meetings
 
@@ -69,6 +69,7 @@ class BigbluebuttonServer < ActiveRecord::Base
     @meetings = []
     response[:meetings].each do |attr|
       room = BigbluebuttonRoom.find_by_server_id_and_meetingid(self.id, attr[:meetingID])
+      # TODO: there might be more attributes returned by the API, review them all
       if room.nil?
         room = BigbluebuttonRoom.new(:server => self, :meetingid => attr[:meetingID],
                                      :name => attr[:meetingID], :attendee_password => attr[:attendeePW],
@@ -78,6 +79,7 @@ class BigbluebuttonServer < ActiveRecord::Base
                                :moderator_password => attr[:moderatorPW])
       end
       room.running = attr[:running]
+      room.update_current_meeting
 
       @meetings << room
     end

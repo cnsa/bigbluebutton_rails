@@ -33,14 +33,6 @@ describe Bigbluebutton::RoomsController do
         should route_to(:controller => "bigbluebutton/rooms", :action => "destroy", :id => "room-1")
       }
       it {
-        {:get => "/#{prefix}/rooms/external"}.
-        should route_to(:controller => "bigbluebutton/rooms", :action => "external")
-      }
-      it {
-        {:post => "/#{prefix}/rooms/external"}.
-        should route_to(:controller => "bigbluebutton/rooms", :action => "external_auth")
-      }
-      it {
         {:get => "/#{prefix}/rooms/room-1/join"}.
         should route_to(:controller => "bigbluebutton/rooms", :action => "join", :id => "room-1")
       }
@@ -62,7 +54,7 @@ describe Bigbluebutton::RoomsController do
       }
       it {
         {:post => "/#{prefix}/rooms/room-1/join"}.
-        should route_to(:controller => "bigbluebutton/rooms", :action => "auth", :id => "room-1")
+        should route_to(:controller => "bigbluebutton/rooms", :action => "join", :id => "room-1")
       }
       it {
         {:post => "/#{prefix}/rooms/room-1/fetch_recordings"}.
@@ -107,16 +99,6 @@ describe Bigbluebutton::RoomsController do
                       :user_id => "1", :id => "room-1")
     }
     it {
-      { :get => "/users/1/rooms/external" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external",
-                      :user_id => "1")
-    }
-    it {
-      { :post => "/users/1/rooms/external" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external_auth",
-                      :user_id => "1")
-    }
-    it {
       { :get => "/users/1/rooms/room-1/join" }.
       should route_to(:controller => "bigbluebutton/rooms", :action => "join",
                       :user_id => "1", :id => "room-1")
@@ -143,7 +125,7 @@ describe Bigbluebutton::RoomsController do
     }
     it {
       { :post => "/users/1/rooms/room-1/join" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "auth",
+      should route_to(:controller => "bigbluebutton/rooms", :action => "join",
                       :user_id => "1", :id => "room-1")
     }
     it {
@@ -189,16 +171,6 @@ describe Bigbluebutton::RoomsController do
                       :user_id => "1", :space_id => "2", :id => "room-1")
     }
     it {
-      { :get => "/users/1/spaces/2/rooms/external" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external",
-                      :user_id => "1", :space_id => "2")
-    }
-    it {
-      { :post => "/users/1/spaces/2/rooms/external" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "external_auth",
-                      :user_id => "1", :space_id => "2")
-    }
-    it {
       { :get => "/users/1/spaces/2/rooms/room-1/join" }.
       should route_to(:controller => "bigbluebutton/rooms", :action => "join",
                       :user_id => "1", :space_id => "2", :id => "room-1")
@@ -225,7 +197,7 @@ describe Bigbluebutton::RoomsController do
     }
     it {
       { :post => "/users/1/spaces/2/rooms/room-1/join" }.
-      should route_to(:controller => "bigbluebutton/rooms", :action => "auth",
+      should route_to(:controller => "bigbluebutton/rooms", :action => "join",
                       :user_id => "1", :space_id => "2", :id => "room-1")
     }
     it {

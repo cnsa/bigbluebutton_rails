@@ -13,21 +13,21 @@ describe Bigbluebutton::ServersController do
       end
       before(:each) { get :index, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json([@server1, @server2].to_json) }
     end
 
     describe "#new" do
       before(:each) { get :new, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json(BigbluebuttonServer.new.to_json).ignoring_values }
     end
 
     describe "#show" do
       before(:each) { get :show, :id => server.to_param, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json(server.to_json) }
     end
 
@@ -39,7 +39,7 @@ describe Bigbluebutton::ServersController do
           post :create, :bigbluebutton_server => new_server.attributes, :format => 'json'
         }
         it { should respond_with(:created) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { should respond_with_json(new_server.to_json).ignoring_attributes }
       end
 
@@ -49,7 +49,7 @@ describe Bigbluebutton::ServersController do
           post :create, :bigbluebutton_server => new_server.attributes, :format => 'json'
         }
         it { should respond_with(:unprocessable_entity) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it {
           new_server.save # should fail
           should respond_with_json(new_server.errors.full_messages.to_json)
@@ -66,7 +66,7 @@ describe Bigbluebutton::ServersController do
           put :update, :id => @server.to_param, :bigbluebutton_server => new_server.attributes, :format => 'json'
         }
         it { should respond_with(:success) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { response.body.should eq("true") }
       end
 
@@ -76,7 +76,7 @@ describe Bigbluebutton::ServersController do
           put :update, :id => @server.to_param, :bigbluebutton_server => new_server.attributes, :format => 'json'
         }
         it { should respond_with(:unprocessable_entity) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it {
           new_server.save # should fail
           should respond_with_json(new_server.errors.full_messages.to_json)
@@ -90,7 +90,7 @@ describe Bigbluebutton::ServersController do
         delete :destroy, :id => @server.to_param, :format => 'json'
       end
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { response.body.should eq("true") }
     end
 
@@ -99,7 +99,7 @@ describe Bigbluebutton::ServersController do
       let(:room2) { FactoryGirl.create(:bigbluebutton_room, :server => server) }
       before do
         # so we return our mocked server
-        BigbluebuttonServer.stub!(:find_by_param).with(server.to_param).
+        BigbluebuttonServer.stub(:find_by_param).with(server.to_param).
           and_return(server)
       end
 
@@ -112,7 +112,7 @@ describe Bigbluebutton::ServersController do
         end
         before(:each) { get :activity, :id => server.to_param, :format => 'json' }
         it { should respond_with(:success) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { should respond_with_json([room1, room2].to_json) }
       end
 
@@ -126,7 +126,7 @@ describe Bigbluebutton::ServersController do
         end
         before(:each) { get :activity, :id => server.to_param, :format => 'json' }
         it { should respond_with(:error) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { should respond_with_json([{ :message => bbb_error_msg[0..200] }, room1, room2].to_json) }
         it { should set_the_flash.to(bbb_error_msg[0..200]) }
       end
@@ -140,7 +140,7 @@ describe Bigbluebutton::ServersController do
         end
         before(:each) { get :activity, :id => server.to_param, :update_list => true, :format => 'json' }
         it { should respond_with(:success) }
-        it { should respond_with_content_type(:json) }
+        it { should respond_with_content_type('application/json') }
         it { should respond_with_json([room1, room2].to_json) }
       end
 
@@ -153,7 +153,7 @@ describe Bigbluebutton::ServersController do
       end
       before(:each) { get :rooms, :id => server.to_param, :format => 'json' }
       it { should respond_with(:success) }
-      it { should respond_with_content_type(:json) }
+      it { should respond_with_content_type('application/json') }
       it { should respond_with_json([@room1, @room2].to_json) }
     end
 

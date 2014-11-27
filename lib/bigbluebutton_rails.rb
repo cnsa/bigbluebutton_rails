@@ -6,6 +6,7 @@ module BigbluebuttonRails
   require 'bigbluebutton_rails/rails'
   require 'bigbluebutton_rails/utils'
   require 'bigbluebutton_rails/controller_methods'
+  require 'bigbluebutton_rails/internal_controller_methods'
   require 'bigbluebutton_rails/rails/routes'
   require 'bigbluebutton_rails/exceptions'
 
@@ -49,6 +50,16 @@ module BigbluebuttonRails
     [ @@metadata_room_id,
       @@metadata_user_id,
       @@metadata_user_name ]
+
+  # Name of the attribute of a user that defines his name/username.
+  # Has to be a symbol!
+  mattr_accessor :user_attr_name
+  @@user_attr_name = :'name'
+
+  # Name of the attribute of a user that defines his ID.
+  # Has to be a symbol!
+  mattr_accessor :user_attr_id
+  @@user_attr_id = :'id'
 
   # Finds the BigbluebuttonRoom associated with the recording data in 'data', if any.
   # TODO: if not found, remove the association or keep the old one?
